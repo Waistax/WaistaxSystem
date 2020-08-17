@@ -14,10 +14,10 @@ import java.util.*;
 public class Log
 {
 	/** The date format to show date in the console */
-	public static final DateFormat DATE_FORMAT = new SimpleDateFormat("yy.MM.dd ");
+	public static final DateFormat DATE_FORMAT = new SimpleDateFormat("dd/MM/yy ");
 	
 	/** The date format to show time in the console */
-	public static final DateFormat TIME_FORMAT = new SimpleDateFormat("hh.mm.ss ");
+	public static final DateFormat TIME_FORMAT = new SimpleDateFormat("HH.mm.ss ");
 
 	/** The color of the date in the console */
 	public static Color dateColor;
