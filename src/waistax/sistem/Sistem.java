@@ -4,6 +4,7 @@ import waistax.engine.*;
 import waistax.engine.renderer.*;
 import waistax.math.*;
 import waistax.registry.*;
+import waistax.sistem.command.*;
 
 import java.awt.*;
 import java.awt.event.*;
@@ -18,7 +19,7 @@ import java.util.*;
  */
 public class Sistem implements App
 {
-	public static final String VERSION = "0.1";
+	public static final String VERSION = "0.2";
 	
 	public static final Registry REGISTRY = new Registry();
 	
@@ -36,9 +37,10 @@ public class Sistem implements App
 		RENDERER.input = new AWTInput()
 				{
 					@Override
-					public void keyTyped(KeyEvent e)
+					public void keyPressed(KeyEvent e)
 					{
-						SISTEM.input(e.getKeyChar());
+						super.keyPressed(e);
+						SISTEM.input(e);
 					}
 				};
 		
@@ -63,6 +65,14 @@ public class Sistem implements App
 	
 	public Color inputColor;
 	
+	public Color inputCadetColor;
+	
+	public int inputCadet;
+	
+	public float inputCadetLastMovementTime;
+	
+	public boolean inputInsert;
+	
 	@Override
 	public void load()
 	{
@@ -83,10 +93,14 @@ public class Sistem implements App
 		REGISTRY.add("sistem:uyarı_kayıdı",		new LogLevel(1, "UYARI",	REGISTRY.get("sistem:sarı_renk", Color.class)));
 		REGISTRY.add("sistem:bilgi_kayıdı",		new LogLevel(2, "BİLGİ",	REGISTRY.get("sistem:turkuaz_renk", Color.class)));
 		REGISTRY.add("sistem:mesaj_kayıdı",		new LogLevel(3, "MESAJ",	REGISTRY.get("sistem:mor_renk", Color.class)));
-		REGISTRY.add("sistem:ayıklama_kayıdı",	new LogLevel(4, "AYIKLAMA",	REGISTRY.get("sistem:açık_gri_renk", Color.class)));
+		REGISTRY.add("sistem:girdi_kayıdı",		new LogLevel(4, "GİRDİ",	REGISTRY.get("sistem:yeşil_renk", Color.class)));
+		REGISTRY.add("sistem:ayıklama_kayıdı",	new LogLevel(5, "AYIKLAMA",	REGISTRY.get("sistem:açık_gri_renk", Color.class)));
 		
 		// Register fonts
-		REGISTRY.add("sistem:consolas_20", new Font("Consolas", Font.PLAIN, 20));
+		REGISTRY.add("sistem:consolas_20", new Font("Consolas", Font.ITALIC, 20));
+		
+		// Register commands
+		REGISTRY.add("sistem:yansıt", new Eco(), Command.class);
 		
 		// Initialize fields
 		allLogs = new ArrayList<>();
@@ -95,6 +109,7 @@ public class Sistem implements App
 		graphics = ((AWTRenderer) Engine.renderer).graphics;
 		input = "";
 		inputColor = REGISTRY.get("sistem:yeşil_renk", Color.class);
+		inputCadetColor = REGISTRY.get("sistem:beyaz_renk", Color.class);
 		
 		// Set the date color
 		Log.dateColor = REGISTRY.get("sistem:beyaz_renk", Color.class);
@@ -148,6 +163,106 @@ public class Sistem implements App
 		
 		graphics.setColor(inputColor);
 		graphics.drawString("> " + input, 10, RENDERER.dimension.y - 10);
+		
+		float time = Engine.nanoTime();
+		
+		if ((time - inputCadetLastMovementTime) / 1000000000.0F < 0.5F || (int) Math.floor(time / 1000000000.0F * 3.0F) % 2 == 0)
+		{
+			graphics.setColor(inputCadetColor);
+			
+			if (inputInsert)
+			
+				graphics.drawString("_", 10 + metrics.stringWidth("> " + input.substring(0, inputCadet)), RENDERER.dimension.y - 10);
+			
+			else
+			
+				graphics.drawString("|", 10 + metrics.stringWidth("> " + input.substring(0, inputCadet)) - metrics.charWidth('|') / 2, RENDERER.dimension.y - 10);
+		}
+	}
+	
+	public synchronized void input(KeyEvent e)
+	{
+		char c = e.getKeyChar();
+		int k = e.getKeyCode();
+		
+		if (k == KeyEvent.VK_ENTER)
+		{
+			if (input.length() > 0)
+			{
+				log(new Log(REGISTRY.get("sistem:girdi_kayıdı", LogLevel.class), input));
+				
+				String[] words = input.split(" ");
+				String cmd = words[0];
+				
+				if (cmd.indexOf(':') < 0)
+					
+					cmd = "sistem:" + cmd;
+				
+				Command command = REGISTRY.get(cmd, Command.class);
+				
+				if (command == null)
+				{
+					log(new Log(REGISTRY.get("sistem:hata_kayıdı", LogLevel.class), "Komut \"" + cmd + "\" bulunamadı!"));
+				}
+				
+				else
+				{
+					String[] args = new String[words.length - 1];
+					System.arraycopy(words, 1, args, 0, args.length);
+					command.run(args);
+				}
+				
+				input = "";
+				inputCadet = 0;
+			}
+		}
+		
+		else if (k == KeyEvent.VK_BACK_SPACE)
+		{
+			if (inputCadet > 0)
+			{
+				input = input.substring(0, inputCadet - 1) + input.substring(inputCadet);
+				inputCadet--;
+			}
+		}
+		
+		else if (k == KeyEvent.VK_DELETE)
+		{
+			if (inputCadet < input.length())
+			{
+				input = input.substring(0, inputCadet) + input.substring(inputCadet + 1);
+			}
+		}
+		
+		else if (k == KeyEvent.VK_LEFT)
+		{
+			if (inputCadet > 0)
+			{
+				inputCadet--;
+				inputCadetLastMovementTime = Engine.nanoTime();
+			}
+		}
+		
+		else if (k == KeyEvent.VK_RIGHT)
+		{
+			if (inputCadet < input.length())
+			{
+				inputCadet++;
+				inputCadetLastMovementTime = Engine.nanoTime();
+			}
+		}
+		
+		else if (k == KeyEvent.VK_INSERT)
+		{
+			inputInsert = !inputInsert;
+		}
+		
+		else if (validChar(c))
+		{
+			if (inputInsert && inputCadet != input.length()) input = input.substring(0, inputCadet) + c + input.substring(inputCadet + 1);
+			else input = input.substring(0, inputCadet) + c + input.substring(inputCadet);
+			inputCadet++;
+		}
 	}
 	
 	public void log(Log... logs)
@@ -169,7 +284,7 @@ public class Sistem implements App
 	
 	public boolean validChar(char c)
 	{
-		return Character.isAlphabetic(c)
+		return Character.isAlphabetic(c) || Character.isDigit(c)
 				|| c == ':'
 				|| c == '_'
 				|| c == '-'
@@ -181,34 +296,5 @@ public class Sistem implements App
 				|| c == '('
 				|| c == ')'
 				|| c == ' ';
-	}
-	
-	public synchronized void input(char c)
-	{
-		if (c == '\n')
-		{
-			if (input.length() > 0)
-			{
-				log(new Log(REGISTRY.get("sistem:mesaj_kayıdı", LogLevel.class), input));
-				input = "";
-			}
-		}
-		
-		else if (c == '\b')
-		{
-			if (input.length() > 0)
-			{
-				input = input.substring(0, input.length() - 1);
-			}
-		}
-		
-		else if (validChar(c))
-		{
-//			LogLevel debugLevel = REGISTRY.get("sistem:ayıklama_kayıdı", LogLevel.class);
-//			Text firstPart = new Text("Karakter girildi ", debugLevel.color);
-//			Text charPart = new Text("" + c, REGISTRY.get("sistem:sarı_renk", Color.class));
-//			log(new Log(debugLevel, firstPart, charPart));
-			input += c;
-		}
 	}
 }
